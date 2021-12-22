@@ -1,7 +1,7 @@
 // PCL lib Functions for processing point clouds 
 
 #include "processPointClouds.h"
-
+#include <unordered_set>
 
 //constructor:
 template<typename PointT>
@@ -94,6 +94,115 @@ std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT
 
     std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr> segResult = SeparateClouds(inliers,cloud);
     return segResult;
+}
+
+template<typename PointT>
+std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr> ProcessPointClouds<PointT>::Segment(typename pcl::PointCloud<PointT>::Ptr cloud, int maxIterations, float distanceThreshold)
+{
+	std::unordered_set<int> inliersResult;
+	srand(time(NULL));
+
+    // Time segmentation process
+    auto startTime = std::chrono::steady_clock::now();
+
+	// TODO: Fill in this function
+
+	// For max iterations 
+
+	// Randomly sample subset and fit line
+
+	// Measure distance between every point and fitted line
+	// If distance is smaller than threshold count it as inlier
+
+	// Return indicies of inliers from fitted line with most inliers
+
+	while(maxIterations--){
+
+		std::unordered_set<int> inliers;
+		while (inliers.size()<3)
+		    inliers.insert(rand()%(cloud->points.size()));
+	    
+		float x1, y1, z1, x2, y2, z2, x3, y3, z3;
+
+		auto itr = inliers.begin();
+		x1 = cloud->points[*itr].x;
+		y1 = cloud->points[*itr].y;
+		z1 = cloud->points[*itr].z;
+		itr++;
+		x2 = cloud->points[*itr].x;
+		y2 = cloud->points[*itr].y;
+		z2 = cloud->points[*itr].z;
+		itr++;
+		x3 = cloud->points[*itr].x;
+		y3 = cloud->points[*itr].y;
+		z3 = cloud->points[*itr].z;
+
+        //vector v1
+		float a1 = x2-x1;
+		float a2 = y2-y1;
+		float a3 = z2-z1;
+		//vector v2
+		float b1 = x3-x1;
+		float b2 = y3-y1;
+		float b3 = z3-z1;
+		//cross product v1 x v2
+		float i = (a2 * b3 - a3 * b2);
+		float j = (a3 * b1 - a1 * b3);
+		float k = (a1 * b2 - a2 * b1);
+        //plane coefficients
+		float a = i;
+		float b = j;
+		float c = k;
+		float d = -(i*x1+j*y1+k*z1);
+
+		for(int index=0; index<cloud->points.size(); index++){
+
+			if(inliers.count(index)>0)
+			    continue;
+
+		    pcl::PointXYZ point = cloud->points[index];
+			float x4=point.x;
+			float y4=point.y;
+			float z4=point.z;
+
+			float d = fabs(a*x4+b*y4+c*z4+d)/sqrt(a*a+b*b+c*c);
+
+			if (d<=distanceThreshold)
+			    inliers.insert(index);
+		}
+
+        if(inliers.size()>inliersResult.size()){
+			inliersResult = inliers;
+		}
+
+	}
+
+    auto endTime = std::chrono::steady_clock::now();
+    auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+    std::cout << "plane segmentation took " << elapsedTime.count() << " milliseconds" << std::endl;
+
+    /*//this part is not able to work with templates
+	pcl::PointCloud<pcl::PointXYZ>::Ptr  cloudInliers(new pcl::PointCloud<pcl::PointXYZ>());
+	pcl::PointCloud<pcl::PointXYZ>::Ptr cloudOutliers(new pcl::PointCloud<pcl::PointXYZ>());
+
+	for(int index = 0; index < cloud->points.size(); index++)
+	{
+		pcl::PointXYZ point = cloud->points[index];
+		if(inliersResult.count(index))
+			cloudInliers->points.push_back(point);
+		else
+			cloudOutliers->points.push_back(point);
+	}
+
+    std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr> segResult(cloudOutliers, cloudInliers);
+    return segResult;*/
+
+    pcl::PointIndices::Ptr inliersPtr (new pcl::PointIndices);
+    //copying contents of std::unordered_set to std::vector
+    inliersPtr->indices.insert(inliersPtr->indices.end(),inliersResult.begin(),inliersResult.end());
+    std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr> segResult = SeparateClouds(inliersPtr,cloud);
+    return segResult;
+
 }
 
 
