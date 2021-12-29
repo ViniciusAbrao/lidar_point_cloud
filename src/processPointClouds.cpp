@@ -2,6 +2,7 @@
 
 #include "processPointClouds.h"
 #include <unordered_set>
+#include "cluster3d.h"
 
 //constructor:
 template<typename PointT>
@@ -249,6 +250,57 @@ std::vector<typename pcl::PointCloud<PointT>::Ptr> ProcessPointClouds<PointT>::C
     std::cout << "clustering took " << elapsedTime.count() << " milliseconds and found " << clusters.size() << " clusters" << std::endl;
 
     return clusters;
+}
+
+template<typename PointT>
+std::vector<typename pcl::PointCloud<PointT>::Ptr> ProcessPointClouds<PointT>::MyClustering(typename pcl::PointCloud<PointT>::Ptr cloud, float clusterTolerance, int minSize, int maxSize)
+{
+    KdTree* tree = new KdTree;
+    std::vector<std::vector<float>> points;
+  
+    for (int i=0; i<cloud->points.size(); i++){
+        	pcl::PointXYZ cloud_point = cloud->points[i];
+			std::vector<float> vect_point;
+            vect_point.push_back(cloud_point.x);
+            vect_point.push_back(cloud_point.y);
+            vect_point.push_back(cloud_point.z);
+         	tree->insert(vect_point,i); 
+            points.push_back(vect_point);
+    }
+
+    EuCluster ec;
+    // Time segmentation process
+  	auto startTime = std::chrono::steady_clock::now();
+
+  	std::vector<std::vector<int>> clusters = ec.euclideanCluster(points, tree, clusterTolerance);
+
+    delete tree;
+
+  	// clusters cloud to return
+    std::vector<typename pcl::PointCloud<PointT>::Ptr> clouds_return;
+
+    int n_clusters=0;
+
+  	for(std::vector<int> cluster : clusters)
+  	{
+  		typename pcl::PointCloud<PointT>::Ptr clusterCloud(new pcl::PointCloud<PointT>());
+  		for(int indice: cluster)
+  			clusterCloud->points.push_back(pcl::PointXYZ(points[indice][0],points[indice][1],points[indice][2]));
+
+        clusterCloud->width = clusterCloud->points.size();
+        clusterCloud->height = 1;
+        clusterCloud->is_dense = true;
+        if(clusterCloud->width>minSize && clusterCloud->width<maxSize){
+            clouds_return.push_back(clusterCloud);
+            n_clusters=n_clusters+1;
+        }
+  	}
+
+    auto endTime = std::chrono::steady_clock::now();
+  	auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+  	std::cout << "clustering found " << n_clusters << " and took " << elapsedTime.count() << " milliseconds" << std::endl;
+
+    return clouds_return;
 }
 
 

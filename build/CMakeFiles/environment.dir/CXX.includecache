@@ -6,6 +6,8 @@
 
 #IncludeRegexTransform: 
 
+/home/abrao/dev/SFND_Lidar_Obstacle_Detection/src/cluster3d.h
+
 /home/abrao/dev/SFND_Lidar_Obstacle_Detection/src/environment.cpp
 sensors/lidar.h
 /home/abrao/dev/SFND_Lidar_Obstacle_Detection/src/sensors/lidar.h
@@ -21,6 +23,8 @@ processPointClouds.h
 /home/abrao/dev/SFND_Lidar_Obstacle_Detection/src/processPointClouds.h
 unordered_set
 -
+cluster3d.h
+/home/abrao/dev/SFND_Lidar_Obstacle_Detection/src/cluster3d.h
 
 /home/abrao/dev/SFND_Lidar_Obstacle_Detection/src/processPointClouds.h
 pcl/io/pcd_io.h
