@@ -29,12 +29,41 @@ typename pcl::PointCloud<PointT>::Ptr ProcessPointClouds<PointT>::FilterCloud(ty
     auto startTime = std::chrono::steady_clock::now();
 
     // TODO:: Fill in the function to do voxel grid point reduction and region based filtering
+    pcl::VoxelGrid<PointT> vg;
+    typename pcl::PointCloud<PointT>::Ptr cloudFiltered (new pcl::PointCloud<PointT>);
+    vg.setInputCloud (cloud);
+    vg.setLeafSize (filterRes, filterRes, filterRes);
+    vg.filter (*cloudFiltered); 
+
+    typename pcl::PointCloud<PointT>::Ptr cloudRegion (new pcl::PointCloud<PointT>);
+    pcl::CropBox<PointT> region(true);
+    region.setMin(minPoint);
+    region.setMax(maxPoint);
+    region.setInputCloud(cloudFiltered);
+    region.filter(*cloudRegion);
+
+    std::vector<int> indices;
+    pcl::CropBox<PointT> roof(true);
+    roof.setMin(Eigen::Vector4f (-1.5, -1.7, -1, 1));
+    roof.setMax(Eigen::Vector4f (2.6, 1.7, -0.4, 1));
+    roof.setInputCloud(cloudRegion);
+    roof.filter(indices);
+
+    pcl::PointIndices::Ptr inliers {new pcl::PointIndices};
+    for(int point : indices)
+        inliers->indices.push_back(point);
+
+    pcl::ExtractIndices<PointT> extract;
+    extract.setInputCloud(cloudRegion);
+    extract.setIndices(inliers);
+    extract.setNegative(true);
+    extract.filter(*cloudRegion);
 
     auto endTime = std::chrono::steady_clock::now();
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
     std::cout << "filtering took " << elapsedTime.count() << " milliseconds" << std::endl;
 
-    return cloud;
+    return cloudRegion;
 
 }
 
@@ -120,6 +149,7 @@ std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT
 	while(maxIterations--){
 
 		std::unordered_set<int> inliers;
+
 		while (inliers.size()<3)
 		    inliers.insert(rand()%(cloud->points.size()));
 	    
@@ -161,20 +191,20 @@ std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT
 			if(inliers.count(index)>0)
 			    continue;
 
-		    pcl::PointXYZ point = cloud->points[index];
+		    PointT point = cloud->points[index];
 			float x4=point.x;
 			float y4=point.y;
 			float z4=point.z;
 
-			float d = fabs(a*x4+b*y4+c*z4+d)/sqrt(a*a+b*b+c*c);
+			float dist = fabs(a*x4+b*y4+c*z4+d)/sqrt(a*a+b*b+c*c);
 
-			if (d<=distanceThreshold)
+			if (dist<=distanceThreshold)
 			    inliers.insert(index);
+        
 		}
 
-        if(inliers.size()>inliersResult.size()){
+        if(inliers.size()>inliersResult.size())
 			inliersResult = inliers;
-		}
 
 	}
 
@@ -182,30 +212,14 @@ std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
     std::cout << "plane segmentation took " << elapsedTime.count() << " milliseconds" << std::endl;
 
-    /*//this part is not able to work with templates
-	pcl::PointCloud<pcl::PointXYZ>::Ptr  cloudInliers(new pcl::PointCloud<pcl::PointXYZ>());
-	pcl::PointCloud<pcl::PointXYZ>::Ptr cloudOutliers(new pcl::PointCloud<pcl::PointXYZ>());
-
-	for(int index = 0; index < cloud->points.size(); index++)
-	{
-		pcl::PointXYZ point = cloud->points[index];
-		if(inliersResult.count(index))
-			cloudInliers->points.push_back(point);
-		else
-			cloudOutliers->points.push_back(point);
-	}
-
-    std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr> segResult(cloudOutliers, cloudInliers);
-    return segResult;*/
-
     pcl::PointIndices::Ptr inliersPtr (new pcl::PointIndices);
     //copying contents of std::unordered_set to std::vector
     inliersPtr->indices.insert(inliersPtr->indices.end(),inliersResult.begin(),inliersResult.end());
+
     std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr> segResult = SeparateClouds(inliersPtr,cloud);
     return segResult;
 
 }
-
 
 template<typename PointT>
 std::vector<typename pcl::PointCloud<PointT>::Ptr> ProcessPointClouds<PointT>::Clustering(typename pcl::PointCloud<PointT>::Ptr cloud, float clusterTolerance, int minSize, int maxSize)
@@ -259,7 +273,7 @@ std::vector<typename pcl::PointCloud<PointT>::Ptr> ProcessPointClouds<PointT>::M
     std::vector<std::vector<float>> points;
   
     for (int i=0; i<cloud->points.size(); i++){
-        	pcl::PointXYZ cloud_point = cloud->points[i];
+        	PointT cloud_point = cloud->points[i];
 			std::vector<float> vect_point;
             vect_point.push_back(cloud_point.x);
             vect_point.push_back(cloud_point.y);
@@ -284,8 +298,13 @@ std::vector<typename pcl::PointCloud<PointT>::Ptr> ProcessPointClouds<PointT>::M
   	for(std::vector<int> cluster : clusters)
   	{
   		typename pcl::PointCloud<PointT>::Ptr clusterCloud(new pcl::PointCloud<PointT>());
-  		for(int indice: cluster)
-  			clusterCloud->points.push_back(pcl::PointXYZ(points[indice][0],points[indice][1],points[indice][2]));
+  		for(int indice: cluster){
+            PointT move_point;
+            move_point.x= points[indice][0]; 
+            move_point.y= points[indice][1];
+            move_point.z= points[indice][2];
+  			clusterCloud->points.push_back(move_point);
+        }
 
         clusterCloud->width = clusterCloud->points.size();
         clusterCloud->height = 1;
